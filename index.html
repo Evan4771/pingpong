@@ -16,81 +16,102 @@
     <button id="startBtn">START</button>
 
     <script>
-        const NORMAL_THRESHOLD = 30; 
-        const SMASH_THRESHOLD = 55; // 稍微下修，讓殺球更有快感
-        let lastTrigger = 0;
-        let audioCtx, normalHitBuffer, smashHitBuffer;
+    const NORMAL_THRESHOLD = 25; // 基礎門檻
+    const SMASH_THRESHOLD = 50;  // 殺球門檻
+    let lastTrigger = 0;
+    let audioCtx, normalHitBuffer, smashHitBuffer;
+    
+    // 用於延遲判定的變數
+    let highestForce = 0;
+    let checkTimeout = null;
 
-        const status = document.getElementById('status');
-        const startBtn = document.getElementById('startBtn');
+    const status = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
 
-        // 極簡化載入
-        async function loadSound(url) {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            return await audioCtx.decodeAudioData(arrayBuffer);
+    async function loadSound(url) {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        return await audioCtx.decodeAudioData(arrayBuffer);
+    }
+
+    startBtn.addEventListener('click', async () => {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+        
+        // 預設檔案已存在於儲存庫
+        normalHitBuffer = await loadSound('PINPON.m4a');
+        smashHitBuffer = await loadSound('smash.m4a');
+
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+            const permission = await DeviceMotionEvent.requestPermission();
+            if (permission === 'granted') run();
+        } else {
+            run();
         }
+    });
 
-        startBtn.addEventListener('click', async () => {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            
-            // 直接抓取檔案
-            normalHitBuffer = await loadSound('PINPON.m4a');
-            smashHitBuffer = await loadSound('smash.m4a');
+    function run() {
+        startBtn.style.display = 'none';
+        status.innerText = "GO!";
 
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const permission = await DeviceMotionEvent.requestPermission();
-                if (permission === 'granted') run();
-            } else {
-                run();
+        window.addEventListener('devicemotion', (event) => {
+            const acc = event.acceleration;
+            if (!acc) return;
+
+            // 計算當前瞬間的總力道
+            const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+            const now = Date.now();
+
+            // 如果力道超過基本門檻，且不在 250ms 的冷卻期內
+            if (force > NORMAL_THRESHOLD && now - lastTrigger > 250) {
+                
+                // 更新這一段觀察期內的最高力道
+                if (force > highestForce) {
+                    highestForce = force;
+                }
+
+                // 如果還沒開始「觀察窗」，就啟動一個 50 毫秒的計時
+                if (!checkTimeout) {
+                    checkTimeout = setTimeout(() => {
+                        
+                        // --- 50 毫秒時間到，進行最終裁決 ---
+                        if (highestForce > SMASH_THRESHOLD) {
+                            hit("smash");
+                        } else {
+                            hit("normal");
+                        }
+
+                        // 裁決完畢，更新狀態
+                        lastTrigger = Date.now();
+                        highestForce = 0;
+                        checkTimeout = null;
+                        
+                    }, 50); // 這 50ms 是等待加速度爬升到頂峰的關鍵時間
+                }
             }
         });
+    }
 
-        function run() {
-            startBtn.style.display = 'none';
-            status.innerText = "GO!";
+    function hit(type) {
+        const source = audioCtx.createBufferSource();
+        source.buffer = (type === "smash") ? smashHitBuffer : normalHitBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
 
-            window.addEventListener('devicemotion', (event) => {
-                const acc = event.acceleration;
-                if (!acc) return;
-
-                const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
-                const now = Date.now();
-
-                // 判斷邏輯：優先判斷殺球
-                if (now - lastTrigger > 300) { // 冷卻時間稍微縮短，增加連擊感
-                    if (force > SMASH_THRESHOLD) {
-                        hit("smash");
-                        lastTrigger = now;
-                    } else if (force > NORMAL_THRESHOLD) {
-                        hit("normal");
-                        lastTrigger = now;
-                    }
-                }
-            });
+        if (type === "smash") {
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            status.innerHTML = "<span style='color:red;'>SUPER SMASH!</span>";
+            document.body.style.backgroundColor = "white"; 
+        } else {
+            if (navigator.vibrate) navigator.vibrate(30);
+            status.innerText = "PING";
+            document.body.style.backgroundColor = "#444";
         }
 
-        function hit(type) {
-            const source = audioCtx.createBufferSource();
-            source.buffer = (type === "smash") ? smashHitBuffer : normalHitBuffer;
-            source.connect(audioCtx.destination);
-            source.start(0);
-
-            if (type === "smash") {
-                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                status.innerHTML = "<span style='color:red;'>SMASH!</span>";
-                document.body.style.backgroundColor = "white"; // 殺球時背景閃白，視覺衝擊更強
-            } else {
-                if (navigator.vibrate) navigator.vibrate(30);
-                status.innerText = "PING";
-                document.body.style.backgroundColor = "#444";
-            }
-
-            setTimeout(() => {
-                document.body.style.backgroundColor = "#1a1a1a";
-            }, 100);
-        }
-    </script>
+        setTimeout(() => {
+            document.body.style.backgroundColor = "#1a1a1a";
+        }, 100);
+    }
+</script>
 </body>
 </html>
