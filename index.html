@@ -60,7 +60,7 @@
 
         function initSensor() {
             let lastTrigger = 0;
-            const THRESHOLD = 15; // 靈敏度，可依據手機狀況調整
+            const THRESHOLD = 10; // 靈敏度，可依據手機狀況調整
 
             window.addEventListener('devicemotion', (event) => {
                 const acc = event.acceleration;
@@ -70,7 +70,7 @@
 
                 if (force > THRESHOLD) {
                     const now = Date.now();
-                    if (now - lastTrigger > 150) { // 縮短冷卻時間至 150ms
+                    if (now - lastTrigger > 300) { // 縮短冷卻時間至 150ms
                         triggerEffect();
                         lastTrigger = now;
                     }
@@ -85,7 +85,7 @@
             // 2. 震動 (Android 加強版)
             if (navigator.vibrate) {
                 // 產生一個短促強烈的震動
-                navigator.vibrate([60]); 
+                navigator.vibrate([100]); 
             }
 
             // 3. 視覺回饋
