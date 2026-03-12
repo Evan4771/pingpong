@@ -63,7 +63,7 @@
             const now = Date.now();
 
             // 如果力道超過基本門檻，且不在 250ms 的冷卻期內
-            if (force > NORMAL_THRESHOLD && now - lastTrigger > 250) {
+            if (force > SMASH_THRESHOLD && now - lastTrigger > 250) {
                 
                 // 更新這一段觀察期內的最高力道
                 if (force > highestForce) {
