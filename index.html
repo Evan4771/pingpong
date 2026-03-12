@@ -59,7 +59,7 @@
                 const now = Date.now();
 
                 // 判斷邏輯：優先判斷殺球
-                if (now - lastTrigger > 200) { // 冷卻時間稍微縮短，增加連擊感
+                if (now - lastTrigger > 300) { // 冷卻時間稍微縮短，增加連擊感
                     if (force > SMASH_THRESHOLD) {
                         hit("smash");
                         lastTrigger = now;
