@@ -3,95 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手機乒乓模擬器</title>
+    <title>專業乒乓模擬器</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #2c3e50; color: white; font-family: sans-serif; overflow: hidden; }
-        #status { font-size: 1.5rem; margin-bottom: 20px; text-align: center; padding: 0 20px; }
-        button { padding: 15px 30px; font-size: 1.2rem; background: #27ae60; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .ball { width: 100px; height: 100px; background: #ffce00; border-radius: 50%; margin-top: 30px; display: none; }
-        .hit-effect { animation: hit 0.2s ease-out; }
-        @keyframes hit { 0% { transform: scale(1); } 50% { transform: scale(1.5); background: white; } 100% { transform: scale(1); } }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: radial-gradient(circle, #2c3e50 0%, #000000 100%); color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
+        #status { font-size: 1.2rem; margin-bottom: 30px; text-align: center; color: #bdc3c7; line-height: 1.6; }
+        .btn-container { position: relative; z-index: 10; }
+        button { padding: 20px 40px; font-size: 1.4rem; background: #e67e22; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 0 #d35400; active: transform: translateY(4px); transition: 0.1s; }
+        button:active { transform: translateY(4px); box-shadow: 0 4px 0 #d35400; }
+        .paddle { width: 120px; height: 120px; border: 8px solid #e74c3c; border-radius: 50%; margin-top: 20px; display: none; position: relative; }
+        .paddle::after { content: ''; position: absolute; bottom: -40px; left: 45px; width: 30px; height: 60px; background: #95a5a6; border-radius: 5px; }
+        .hit { animation: flash 0.15s ease-out; }
+        @keyframes flash { 0% { background: transparent; } 50% { background: rgba(255,255,255,0.8); transform: scale(1.2); } 100% { background: transparent; } }
     </style>
 </head>
 <body>
 
-    <div id="status">準備好打球了嗎？</div>
-    <button id="startBtn">點擊啟動（並開啟音效）</button>
-    <div id="ball" class="ball"></div>
+    <div id="status">準備進入比賽？<br>請先開啟手機聲音並解除靜音</div>
+    
+    <div class="btn-container">
+        <button id="startBtn">進入球場</button>
+    </div>
 
-    <audio id="hitSound" src="https://assets.mixkit.co/active_storage/sfx/1084/1084-preview.mp3" preload="auto"></audio>
+    <div id="paddle" class="paddle"></div>
+
+    <audio id="hitSound" src="https://www.soundjay.com/sport/ping-pong-ball-hit-01.mp3" preload="auto"></audio>
 
     <script>
         const status = document.getElementById('status');
         const startBtn = document.getElementById('startBtn');
-        const ball = document.getElementById('ball');
+        const paddle = document.getElementById('paddle');
         const hitSound = document.getElementById('hitSound');
 
-        let isInitialized = false;
-        const SHAKE_THRESHOLD = 25; // 揮動靈敏度，數值越大需要越用力
+        // 參數設定
+        const THRESHOLD = 22; // 觸發力道
+        let lastTime = 0;
 
         startBtn.addEventListener('click', async () => {
-            // 1. 初始化音效 (iOS 必須經由使用者點擊才能播放)
+            // 預熱音效 (修正 iOS 靜音問題)
             hitSound.play().then(() => { hitSound.pause(); hitSound.currentTime = 0; });
 
-            // 2. 請求 iOS 感測器權限 (iOS 13+)
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                try {
-                    const permission = await DeviceMotionEvent.requestPermission();
-                    if (permission === 'granted') {
-                        startTracking();
-                    } else {
-                        alert('需要權限才能運作');
-                    }
-                } catch (e) { console.error(e); }
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission === 'granted') startApp();
             } else {
-                // 非 iOS 裝置直接啟動
-                startTracking();
+                startApp();
             }
         });
 
-        function startTracking() {
-            startBtn.style.display = 'none';
-            ball.style.display = 'block';
-            status.innerText = "正在監測揮拍... 用力揮動手機！";
+        function startApp() {
+            startBtn.parentElement.style.display = 'none';
+            paddle.style.display = 'block';
+            status.innerHTML = "🏓 握緊手機！<br>模擬揮拍動作試試看";
 
             window.addEventListener('devicemotion', (event) => {
-                const acc = event.acceleration; // 不含重力的加速度
+                const acc = event.acceleration;
                 if (!acc) return;
 
-                // 計算三軸加速度的總向量長度
-                const speed = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+                // 計算瞬時總加速度
+                const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
 
-                if (speed > SHAKE_THRESHOLD) {
-                    triggerHit();
+                if (force > THRESHOLD) {
+                    const now = Date.now();
+                    if (now - lastTime > 250) { // 冷卻時間，避免一次揮拍多次響聲
+                        triggerHit();
+                        lastTime = now;
+                    }
                 }
             });
         }
 
-        let lastHitTime = 0;
         function triggerHit() {
-            const now = Date.now();
-            if (now - lastHitTime < 300) return; // 防止重複觸發 (冷卻時間 300ms)
-            lastHitTime = now;
-
-            // 1. 震動 (Android 支援度較高，iOS 目前僅限特定環境)
-            if (navigator.vibrate) {
-                navigator.vibrate(50); 
-            }
-
-            // 2. 播放擊球聲
+            // 1. 播放真實球聲
             hitSound.currentTime = 0;
             hitSound.play();
 
-            // 3. 視覺反饋
-            status.innerText = "砰！好球！";
-            ball.classList.remove('hit-effect');
-            void ball.offsetWidth; // 強制重繪動畫
-            ball.classList.add('hit-effect');
+            // 2. 觸覺震動 (Android 專屬)
+            if (navigator.vibrate) navigator.vibrate(40);
 
-            setTimeout(() => {
-                status.innerText = "正在監測揮拍... 用力揮動手機！";
-            }, 1000);
+            // 3. 視覺特效
+            paddle.classList.remove('hit');
+            void paddle.offsetWidth; 
+            paddle.classList.add('hit');
         }
     </script>
 </body>
