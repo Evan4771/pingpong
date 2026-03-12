@@ -17,7 +17,7 @@
 
     <script>
     const NORMAL_THRESHOLD = 55; // 基礎門檻
-    const SMASH_THRESHOLD = 125;  // 殺球門檻
+    const SMASH_THRESHOLD = 120;  // 殺球門檻
     let lastTrigger = 0;
     let audioCtx, normalHitBuffer, smashHitBuffer;
     
@@ -63,7 +63,7 @@
             const now = Date.now();
 
             // 如果力道超過基本門檻，且不在 250ms 的冷卻期內
-            if (force > SMASH_THRESHOLD && now - lastTrigger > 250) {
+            if (force > NORMAL_THRESHOLD && now - lastTrigger > 250) {
                 
                 // 更新這一段觀察期內的最高力道
                 if (force > highestForce) {
@@ -86,7 +86,7 @@
                         highestForce = 0;
                         checkTimeout = null;
                         
-                    }, 50); // 這 50ms 是等待加速度爬升到頂峰的關鍵時間
+                    }, 60); // 這 50ms 是等待加速度爬升到頂峰的關鍵時間
                 }
             }
         });
