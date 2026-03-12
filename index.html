@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>手機乒乓模擬器</title>
+    <style>
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #2c3e50; color: white; font-family: sans-serif; overflow: hidden; }
+        #status { font-size: 1.5rem; margin-bottom: 20px; text-align: center; padding: 0 20px; }
+        button { padding: 15px 30px; font-size: 1.2rem; background: #27ae60; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .ball { width: 100px; height: 100px; background: #ffce00; border-radius: 50%; margin-top: 30px; display: none; }
+        .hit-effect { animation: hit 0.2s ease-out; }
+        @keyframes hit { 0% { transform: scale(1); } 50% { transform: scale(1.5); background: white; } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="status">準備好打球了嗎？</div>
+    <button id="startBtn">點擊啟動（並開啟音效）</button>
+    <div id="ball" class="ball"></div>
+
+    <audio id="hitSound" src="https://assets.mixkit.co/active_storage/sfx/1084/1084-preview.mp3" preload="auto"></audio>
+
+    <script>
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const ball = document.getElementById('ball');
+        const hitSound = document.getElementById('hitSound');
+
+        let isInitialized = false;
+        const SHAKE_THRESHOLD = 25; // 揮動靈敏度，數值越大需要越用力
+
+        startBtn.addEventListener('click', async () => {
+            // 1. 初始化音效 (iOS 必須經由使用者點擊才能播放)
+            hitSound.play().then(() => { hitSound.pause(); hitSound.currentTime = 0; });
+
+            // 2. 請求 iOS 感測器權限 (iOS 13+)
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission === 'granted') {
+                        startTracking();
+                    } else {
+                        alert('需要權限才能運作');
+                    }
+                } catch (e) { console.error(e); }
+            } else {
+                // 非 iOS 裝置直接啟動
+                startTracking();
+            }
+        });
+
+        function startTracking() {
+            startBtn.style.display = 'none';
+            ball.style.display = 'block';
+            status.innerText = "正在監測揮拍... 用力揮動手機！";
+
+            window.addEventListener('devicemotion', (event) => {
+                const acc = event.acceleration; // 不含重力的加速度
+                if (!acc) return;
+
+                // 計算三軸加速度的總向量長度
+                const speed = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+
+                if (speed > SHAKE_THRESHOLD) {
+                    triggerHit();
+                }
+            });
+        }
+
+        let lastHitTime = 0;
+        function triggerHit() {
+            const now = Date.now();
+            if (now - lastHitTime < 300) return; // 防止重複觸發 (冷卻時間 300ms)
+            lastHitTime = now;
+
+            // 1. 震動 (Android 支援度較高，iOS 目前僅限特定環境)
+            if (navigator.vibrate) {
+                navigator.vibrate(50); 
+            }
+
+            // 2. 播放擊球聲
+            hitSound.currentTime = 0;
+            hitSound.play();
+
+            // 3. 視覺反饋
+            status.innerText = "砰！好球！";
+            ball.classList.remove('hit-effect');
+            void ball.offsetWidth; // 強制重繪動畫
+            ball.classList.add('hit-effect');
+
+            setTimeout(() => {
+                status.innerText = "正在監測揮拍... 用力揮動手機！";
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
