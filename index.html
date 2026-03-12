@@ -16,8 +16,8 @@
     <button id="startBtn">START</button>
 
     <script>
-    const NORMAL_THRESHOLD = 50; // 基礎門檻
-    const SMASH_THRESHOLD = 80;  // 殺球門檻
+    const NORMAL_THRESHOLD = 55; // 基礎門檻
+    const SMASH_THRESHOLD = 125;  // 殺球門檻
     let lastTrigger = 0;
     let audioCtx, normalHitBuffer, smashHitBuffer;
     
@@ -99,11 +99,11 @@
         source.start(0);
 
         if (type === "smash") {
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            if (navigator.vibrate) navigator.vibrate([200, 50, 100]);
             status.innerHTML = "<span style='color:red;'>SUPER SMASH!</span>";
             document.body.style.backgroundColor = "white"; 
         } else {
-            if (navigator.vibrate) navigator.vibrate(30);
+            if (navigator.vibrate) navigator.vibrate(90);
             status.innerText = "PING";
             document.body.style.backgroundColor = "#444";
         }
