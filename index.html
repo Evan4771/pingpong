@@ -3,87 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ping Pong </title>
+    <title>Ping Pong Smash</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; font-family: sans-serif; }
-        #status { font-size: 1.2rem; text-align: center; margin-bottom: 20px; color: #00ff00; }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; font-family: sans-serif; transition: background 0.1s; }
+        #status { font-size: 1.5rem; text-align: center; margin-bottom: 20px; color: #00ff00; font-weight: bold; }
         button { padding: 25px 50px; font-size: 1.5rem; background: #ff4757; color: white; border: none; border-radius: 10px; box-shadow: 0 5px #ff6b81; cursor: pointer; }
         button:active { transform: translateY(3px); box-shadow: 0 2px #ff6b81; }
-        .hint { margin-top: 20px; font-size: 0.8rem; color: #888; }
+        .hint { margin-top: 20px; font-size: 0.8rem; color: #888; text-align: center; }
     </style>
 </head>
 <body>
 
     <div id="status">準備擊球</div>
-    <button id="startBtn">點擊開始 (啟動音訊)</button>
-    <div class="hint">iOS 不支援震動，Android 支援</div>
+    <button id="startBtn">點擊進入球場</button>
+    <div class="hint">iOS 不支援震動，Android 支援<br>請確認 PINPON.m4a 與 smash.m4a 已上傳</div>
 
     <script>
-       // 1. 設定兩個力道門檻
-const NORMAL_THRESHOLD = 30; // 普通擊球
-const SMASH_THRESHOLD = 60;  // 殺球（需要非常用力揮動）
+        // 1. 定義基礎變數
+        const NORMAL_THRESHOLD = 30; 
+        const SMASH_THRESHOLD = 60;  
+        let lastTrigger = 0;
+        let audioCtx;
+        let normalHitBuffer, smashHitBuffer;
 
-// 2. 準備多個音訊緩衝
-let normalHitBuffer, smashHitBuffer;
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
 
-async function initAudio() {
-    audioCtx = new AudioContext();
-    // 載入普通聲音
-    normalHitBuffer = await loadSound('PINPON.m4a');
-    // 載入更有力的殺球聲 (選用更重、更大的聲音)
-    smashHitBuffer = await loadSound('smash.m4a');
-}
-
-// 3. 修改感測器邏輯
-window.addEventListener('devicemotion', (event) => {
-    const acc = event.acceleration;
-    if (!acc) return;
-
-    const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
-    const now = Date.now();
-
-    if (now - lastTrigger > 300) {
-        if (force > SMASH_THRESHOLD) {
-            // 觸發殺球
-            triggerEffect("smash");
-            lastTrigger = now;
-        } else if (force > NORMAL_THRESHOLD) {
-            // 觸發普通擊球
-            triggerEffect("normal");
-            lastTrigger = now;
+        // 2. 音訊載入函數 (必備)
+        async function loadSound(url) {
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                return await audioCtx.decodeAudioData(arrayBuffer);
+            } catch (e) {
+                console.error("音訊載入失敗:", url, e);
+                return null;
+            }
         }
-    }
-});
 
-// 4. 修改效果觸發函式
-function triggerEffect(type) {
-    if (type === "smash") {
-        // 殺球效果：超強震動 + 大聲
-        playBuffer(smashHitBuffer);
-        if (navigator.vibrate) navigator.vibrate([100, 30, 100]); // 長短長連續震動
-        status.innerHTML = "<span style='color:red; font-size:2rem; font-weight:bold;'>SMASH!!!</span>";
-        document.body.style.backgroundColor = "red";
-    } else {
-        // 普通效果
-        playBuffer(normalHitBuffer);
-        if (navigator.vibrate) navigator.vibrate(30);
-        status.innerText = "砰！";
-        document.body.style.backgroundColor = "#333";
-    }
+        // 3. 點擊按鈕後的初始化
+        startBtn.addEventListener('click', async () => {
+            status.innerText = "載入中...";
+            
+            // 初始化 AudioContext
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
 
-    // 恢復背景
-    setTimeout(() => {
-        document.body.style.backgroundColor = "#1a1a1a";
-    }, 150);
-}
+            // 載入你的自定義音訊檔
+            normalHitBuffer = await loadSound('PINPON.m4a');
+            smashHitBuffer = await loadSound('smash.m4a');
 
-function playBuffer(buffer) {
-    if (!buffer) return;
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    source.start(0);
-}
+            // iOS 權限請求
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission === 'granted') {
+                        startTracking();
+                    } else {
+                        status.innerText = "權限被拒絕";
+                    }
+                } catch (e) {
+                    status.innerText = "權限請求出錯";
+                }
+            } else {
+                startTracking();
+            }
+        });
+
+        function startTracking() {
+            startBtn.style.display = 'none';
+            status.innerText = "感測中... 用力揮動！";
+
+            window.addEventListener('devicemotion', (event) => {
+                const acc = event.acceleration;
+                if (!acc) return;
+
+                const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+                const now = Date.now();
+
+                if (now - lastTrigger > 300) {
+                    if (force > SMASH_THRESHOLD) {
+                        triggerEffect("smash.m4a");
+                        lastTrigger = now;
+                    } else if (force > NORMAL_THRESHOLD) {
+                        triggerEffect("PINPON.m4a");
+                        lastTrigger = now;
+                    }
+                }
+            });
+        }
+
+        function triggerEffect(type) {
+            if (type === "smash") {
+                playBuffer(smashHitBuffer);
+                if (navigator.vibrate) navigator.vibrate([100, 30, 100]);
+                status.innerHTML = "<span style='color:red; font-size:2.5rem;'>SMASH!!!</span>";
+                document.body.style.backgroundColor = "darkred";
+            } else {
+                playBuffer(normalHitBuffer);
+                if (navigator.vibrate) navigator.vibrate(30);
+                status.innerText = "砰！";
+                document.body.style.backgroundColor = "#333";
+            }
+
+            setTimeout(() => {
+                document.body.style.backgroundColor = "#1a1a1a";
+                if (type === "smash") status.innerText = "感測中...";
+            }, 200);
+        }
+
+        function playBuffer(buffer) {
+            if (!buffer || !audioCtx) return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
     </script>
 </body>
 </html>
