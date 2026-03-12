@@ -3,87 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>專業乒乓模擬器</title>
+    <title>極速乒乓模擬器</title>
     <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: radial-gradient(circle, #2c3e50 0%, #000000 100%); color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
-        #status { font-size: 1.2rem; margin-bottom: 30px; text-align: center; color: #bdc3c7; line-height: 1.6; }
-        .btn-container { position: relative; z-index: 10; }
-        button { padding: 20px 40px; font-size: 1.4rem; background: #e67e22; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; box-shadow: 0 8px 0 #d35400; active: transform: translateY(4px); transition: 0.1s; }
-        button:active { transform: translateY(4px); box-shadow: 0 4px 0 #d35400; }
-        .paddle { width: 120px; height: 120px; border: 8px solid #e74c3c; border-radius: 50%; margin-top: 20px; display: none; position: relative; }
-        .paddle::after { content: ''; position: absolute; bottom: -40px; left: 45px; width: 30px; height: 60px; background: #95a5a6; border-radius: 5px; }
-        .hit { animation: flash 0.15s ease-out; }
-        @keyframes flash { 0% { background: transparent; } 50% { background: rgba(255,255,255,0.8); transform: scale(1.2); } 100% { background: transparent; } }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #1a1a1a; color: white; font-family: sans-serif; }
+        #status { font-size: 1.2rem; text-align: center; margin-bottom: 20px; color: #00ff00; }
+        button { padding: 25px 50px; font-size: 1.5rem; background: #ff4757; color: white; border: none; border-radius: 10px; box-shadow: 0 5px #ff6b81; cursor: pointer; }
+        button:active { transform: translateY(3px); box-shadow: 0 2px #ff6b81; }
+        .hint { margin-top: 20px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
 
-    <div id="status">準備進入比賽？<br>請先開啟手機聲音並解除靜音</div>
-    
-    <div class="btn-container">
-        <button id="startBtn">進入球場</button>
-    </div>
-
-    <div id="paddle" class="paddle"></div>
-
-    <audio id="hitSound" src="PINPON.m4a" preload="auto"></audio>
+    <div id="status">準備擊球</div>
+    <button id="startBtn">點擊開始 (啟動音訊)</button>
+    <div class="hint">iOS 不支援震動，Android 支援</div>
 
     <script>
         const status = document.getElementById('status');
         const startBtn = document.getElementById('startBtn');
-        const paddle = document.getElementById('paddle');
-        const hitSound = document.getElementById('hitSound');
+        
+        // 使用 Web Audio API 解決傳統 <audio> 的延遲問題
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        let hitBuffer;
 
-        // 參數設定
-        const THRESHOLD = 15; // 觸發力道
-        let lastTime = 0;
+        // 預載入音訊檔案
+        async function loadSound(url) {
+            const response = await fetch(url);
+            const arrayBuffer = await response.arrayBuffer();
+            return await audioCtx.decodeAudioData(arrayBuffer);
+        }
 
         startBtn.addEventListener('click', async () => {
-            // 預熱音效 (修正 iOS 靜音問題)
-            hitSound.play().then(() => { hitSound.pause(); hitSound.currentTime = 0; });
-
+            audioCtx = new AudioContext();
+            // 使用更清脆、起頭極快的音效
+            hitBuffer = await loadSound('PINPON.m4a');
+            
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
                 const permission = await DeviceMotionEvent.requestPermission();
-                if (permission === 'granted') startApp();
+                if (permission === 'granted') initSensor();
             } else {
-                startApp();
+                initSensor();
             }
+            
+            startBtn.style.display = 'none';
+            status.innerText = "感測中... 用力揮動！";
         });
 
-        function startApp() {
-            startBtn.parentElement.style.display = 'none';
-            paddle.style.display = 'block';
-            status.innerHTML = "🏓 握緊手機！<br>模擬揮拍動作試試看";
+        function playHitSound() {
+            if (!hitBuffer) return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = hitBuffer;
+            source.connect(audioCtx.destination);
+            source.start(0); // 幾乎 0 延遲播放
+        }
+
+        function initSensor() {
+            let lastTrigger = 0;
+            const THRESHOLD = 25; // 靈敏度，可依據手機狀況調整
 
             window.addEventListener('devicemotion', (event) => {
                 const acc = event.acceleration;
                 if (!acc) return;
 
-                // 計算瞬時總加速度
                 const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
 
                 if (force > THRESHOLD) {
                     const now = Date.now();
-                    if (now - lastTime > 250) { // 冷卻時間，避免一次揮拍多次響聲
-                        triggerHit();
-                        lastTime = now;
+                    if (now - lastTrigger > 150) { // 縮短冷卻時間至 150ms
+                        triggerEffect();
+                        lastTrigger = now;
                     }
                 }
             });
         }
 
-        function triggerHit() {
-            // 1. 播放真實球聲
-            hitSound.currentTime = 0;
-            hitSound.play();
+        function triggerEffect() {
+            // 1. 播放音效 (Web Audio API)
+            playHitSound();
 
-            // 2. 觸覺震動 (Android 專屬)
-            if (navigator.vibrate) navigator.vibrate(40);
+            // 2. 震動 (Android 加強版)
+            if (navigator.vibrate) {
+                // 產生一個短促強烈的震動
+                navigator.vibrate([30]); 
+            }
 
-            // 3. 視覺特效
-            paddle.classList.remove('hit');
-            void paddle.offsetWidth; 
-            paddle.classList.add('hit');
+            // 3. 視覺回饋
+            status.innerText = "砰！";
+            document.body.style.backgroundColor = "#333";
+            setTimeout(() => {
+                document.body.style.backgroundColor = "#1a1a1a";
+                status.innerText = "感測中...";
+            }, 100);
         }
     </script>
 </body>
