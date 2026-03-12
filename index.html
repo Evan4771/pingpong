@@ -19,83 +19,71 @@
     <div class="hint">iOS 不支援震動，Android 支援</div>
 
     <script>
-        const status = document.getElementById('status');
-        const startBtn = document.getElementById('startBtn');
-        
-        // 使用 Web Audio API 解決傳統 <audio> 的延遲問題
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        let audioCtx;
-        let hitBuffer;
+       // 1. 設定兩個力道門檻
+const NORMAL_THRESHOLD = 30; // 普通擊球
+const SMASH_THRESHOLD = 60;  // 殺球（需要非常用力揮動）
 
-        // 預載入音訊檔案
-        async function loadSound(url) {
-            const response = await fetch(url);
-            const arrayBuffer = await response.arrayBuffer();
-            return await audioCtx.decodeAudioData(arrayBuffer);
+// 2. 準備多個音訊緩衝
+let normalHitBuffer, smashHitBuffer;
+
+async function initAudio() {
+    audioCtx = new AudioContext();
+    // 載入普通聲音
+    normalHitBuffer = await loadSound('PINPON.m4a');
+    // 載入更有力的殺球聲 (選用更重、更大的聲音)
+    smashHitBuffer = await loadSound('smash.m4a');
+}
+
+// 3. 修改感測器邏輯
+window.addEventListener('devicemotion', (event) => {
+    const acc = event.acceleration;
+    if (!acc) return;
+
+    const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+    const now = Date.now();
+
+    if (now - lastTrigger > 300) {
+        if (force > SMASH_THRESHOLD) {
+            // 觸發殺球
+            triggerEffect("smash");
+            lastTrigger = now;
+        } else if (force > NORMAL_THRESHOLD) {
+            // 觸發普通擊球
+            triggerEffect("normal");
+            lastTrigger = now;
         }
+    }
+});
 
-        startBtn.addEventListener('click', async () => {
-            audioCtx = new AudioContext();
-            // 使用更清脆、起頭極快的音效
-            hitBuffer = await loadSound('PINPON.m4a');
-            
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const permission = await DeviceMotionEvent.requestPermission();
-                if (permission === 'granted') initSensor();
-            } else {
-                initSensor();
-            }
-            
-            startBtn.style.display = 'none';
-            status.innerText = "感測中... 用力揮動！";
-        });
+// 4. 修改效果觸發函式
+function triggerEffect(type) {
+    if (type === "smash") {
+        // 殺球效果：超強震動 + 大聲
+        playBuffer(smashHitBuffer);
+        if (navigator.vibrate) navigator.vibrate([100, 30, 100]); // 長短長連續震動
+        status.innerHTML = "<span style='color:red; font-size:2rem; font-weight:bold;'>SMASH!!!</span>";
+        document.body.style.backgroundColor = "red";
+    } else {
+        // 普通效果
+        playBuffer(normalHitBuffer);
+        if (navigator.vibrate) navigator.vibrate(30);
+        status.innerText = "砰！";
+        document.body.style.backgroundColor = "#333";
+    }
 
-        function playHitSound() {
-            if (!hitBuffer) return;
-            const source = audioCtx.createBufferSource();
-            source.buffer = hitBuffer;
-            source.connect(audioCtx.destination);
-            source.start(0); // 幾乎 0 延遲播放
-        }
+    // 恢復背景
+    setTimeout(() => {
+        document.body.style.backgroundColor = "#1a1a1a";
+    }, 150);
+}
 
-        function initSensor() {
-            let lastTrigger = 0;
-            const THRESHOLD = 30; // 靈敏度，可依據手機狀況調整
-
-            window.addEventListener('devicemotion', (event) => {
-                const acc = event.acceleration;
-                if (!acc) return;
-
-                const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
-
-                if (force > THRESHOLD) {
-                    const now = Date.now();
-                    if (now - lastTrigger > 300) { // 縮短冷卻時間至 150ms
-                        triggerEffect();
-                        lastTrigger = now;
-                    }
-                }
-            });
-        }
-
-        function triggerEffect() {
-            // 1. 播放音效 (Web Audio API)
-            playHitSound();
-
-            // 2. 震動 (Android 加強版)
-            if (navigator.vibrate) {
-                // 產生一個短促強烈的震動
-                navigator.vibrate([100]); 
-            }
-
-            // 3. 視覺回饋
-            status.innerText = "砰！";
-            document.body.style.backgroundColor = "#333";
-            setTimeout(() => {
-                document.body.style.backgroundColor = "#1a1a1a";
-                status.innerText = "感測中...";
-            }, 100);
-        }
+function playBuffer(buffer) {
+    if (!buffer) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+}
     </script>
 </body>
 </html>
